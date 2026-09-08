@@ -1,27 +1,40 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>AHT Comparativo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>AHT Dashboard</title>
 
 <style>
 body{
-    font-family: Arial, sans-serif;
-    background:#f7f9fc;
-    margin:0;
-    padding:20px;
+    font-family: Arial,sans-serif;
+    background:#f4f6fa;
+    margin:20px;
 }
 
 .container{
     background:white;
-    border-radius:10px;
     padding:20px;
-    box-shadow:0 2px 8px rgba(0,0,0,.1);
+    border-radius:12px;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
 }
 
-h2{
-    margin-top:0;
+h1{
     color:#003366;
+    margin-top:0;
+}
+
+.filters{
+    display:flex;
+    gap:15px;
+    margin-bottom:20px;
+    align-items:center;
+}
+
+select{
+    padding:8px;
+    border-radius:6px;
 }
 
 table{
@@ -32,13 +45,13 @@ table{
 th{
     background:#0059b3;
     color:white;
-    padding:12px;
+    padding:10px;
     text-align:left;
 }
 
 td{
     padding:10px;
-    border-bottom:1px solid #e0e0e0;
+    border-bottom:1px solid #ddd;
 }
 
 .green{
@@ -51,91 +64,275 @@ td{
     font-weight:bold;
 }
 
-.neutral{
-    color:#666;
+.gray{
+    color:#6c757d;
     font-weight:bold;
 }
 
-.card{
+.summary{
     display:flex;
-    gap:20px;
+    gap:15px;
     margin-bottom:20px;
 }
 
-.metric{
-    flex:1;
+.card{
     background:#eef4ff;
-    border-left:5px solid #0059b3;
     padding:15px;
     border-radius:8px;
+    min-width:180px;
 }
 
-.metric-value{
-    font-size:24px;
+.card-value{
+    font-size:22px;
     font-weight:bold;
 }
 </style>
-
 </head>
+
 <body>
 
 <div class="container">
 
-<h2>📞 AHT Comparativo Hoy vs Ayer</h2>
+<h1>📞 AHT Comparativo</h1>
 
-<div class="card">
+<div class="filters">
+    <label>Fecha:</label>
+    <select id="dateSelect"></select>
+</div>
 
-    <div class="metric">
-        <div>AHT Promedio Hoy</div>
-        <div class="metric-value">06:45</div>
+<div class="summary">
+    <div class="card">
+        <div>AHT Promedio Seleccionado</div>
+        <div class="card-value" id="avgCurrent">-</div>
     </div>
 
-    <div class="metric">
-        <div>AHT Promedio Ayer</div>
-        <div class="metric-value">07:03</div>
+    <div class="card">
+        <div>AHT Promedio Día Anterior</div>
+        <div class="card-value" id="avgPrevious">-</div>
     </div>
-
 </div>
 
 <table>
-
 <thead>
 <tr>
-    <th>Agente</th>
-    <th>AHT Hoy</th>
-    <th>AHT Ayer</th>
-    <th>Diferencia</th>
+<th>Agente</th>
+<th>AHT Día Seleccionado</th>
+<th>AHT Día Anterior</th>
+<th>Diferencia</th>
 </tr>
 </thead>
-
-<tbody>
-
-<tr>
-    <td>Juan Pérez</td>
-    <td>07:20</td>
-    <td>06:45</td>
-    <td class="red">▲ +35s</td>
-</tr>
-
-<tr>
-    <td>María López</td>
-    <td>05:50</td>
-    <td>06:30</td>
-    <td class="green">▼ -40s</td>
-</tr>
-
-<tr>
-    <td>Carlos Ruiz</td>
-    <td>06:10</td>
-    <td>06:10</td>
-    <td class="neutral">━ 0s</td>
-</tr>
-
-</tbody>
-
+<tbody id="tableBody"></tbody>
 </table>
 
 </div>
+
+<script>
+
+let availableFiles=[];
+
+async function loadFilesList(){
+
+    const response = await fetch('./data/files.json');
+    availableFiles = await response.json();
+
+    const selector = document.getElementById('dateSelect');
+
+    availableFiles.forEach((file,index)=>{
+
+        let option=document.createElement('option');
+
+        option.value=index;
+        option.textContent=file.replace('.csv','');
+
+        selector.appendChild(option);
+    });
+
+    selector.selectedIndex=availableFiles.length-1;
+
+    selector.addEventListener('change',loadDashboard);
+
+    loadDashboard();
+}
+
+function secondsToText(ms){
+
+   if(!ms || isNaN(ms)) return "-";
+
+   const totalSeconds=Math.round(ms/1000);
+
+   const m=Math.floor(totalSeconds/60);
+   const s=totalSeconds%60;
+
+   return `${m}m ${s}s`;
+}
+
+async function loadCsv(path){
+
+    const resp=await fetch(path);
+
+    const text=await resp.text();
+
+    const lines=text.split('\n').filter(x=>x.trim());
+
+    const headers=parseCSV(lines[0]);
+
+    const rows=[];
+
+    for(let i=1;i<lines.length;i++){
+
+       const values=parseCSV(lines[i]);
+
+       let row={};
+
+       headers.forEach((h,index)=>{
+            row[h]=values[index];
+       });
+
+       rows.push(row);
+    }
+
+    return rows;
+}
+
+function parseCSV(line){
+
+    const result=[];
+    let current="";
+    let inside=false;
+
+    for(let i=0;i<line.length;i++){
+
+        const char=line[i];
+
+        if(char === '"'){
+            inside=!inside;
+        }
+        else if(char === ',' && !inside){
+            result.push(current);
+            current="";
+        }
+        else{
+            current+=char;
+        }
+    }
+
+    result.push(current);
+
+    return result;
+}
+
+function buildMap(rows){
+
+   const map={};
+
+   rows.forEach(r=>{
+
+      const name=r["Agent Name"];
+
+      const aht=parseFloat(r["Avg Handle"]);
+
+      if(name && !isNaN(aht)){
+         map[name]=aht;
+      }
+
+   });
+
+   return map;
+}
+
+async function loadDashboard(){
+
+    const idx=parseInt(document.getElementById("dateSelect").value);
+
+    const currentFile=availableFiles[idx];
+
+    const previousFile=availableFiles[idx-1];
+
+    const currentRows=await loadCsv('./data/' + currentFile);
+
+    const currentMap=buildMap(currentRows);
+
+    let previousMap={};
+
+    if(previousFile){
+
+       const previousRows=await loadCsv('./data/' + previousFile);
+
+       previousMap=buildMap(previousRows);
+    }
+
+    let currentValues=Object.values(currentMap);
+
+    let previousValues=Object.values(previousMap);
+
+    let avgCurrent=currentValues.reduce((a,b)=>a+b,0)/currentValues.length;
+
+    let avgPrevious=previousValues.length
+        ? previousValues.reduce((a,b)=>a+b,0)/previousValues.length
+        : 0;
+
+    document.getElementById('avgCurrent').textContent=
+        secondsToText(avgCurrent);
+
+    document.getElementById('avgPrevious').textContent=
+        previousValues.length ? secondsToText(avgPrevious) : "-";
+
+    let tbody=document.getElementById('tableBody');
+
+    tbody.innerHTML='';
+
+    Object.keys(currentMap)
+      .sort()
+      .forEach(agent=>{
+
+        const today=currentMap[agent];
+
+        const yesterday=previousMap[agent];
+
+        let diffCell="<span class='gray'>N/A</span>";
+
+        if(yesterday){
+
+            const diff=today-yesterday;
+
+            const mins=Math.floor(Math.abs(diff)/1000/60);
+
+            const secs=Math.floor((Math.abs(diff)/1000)%60);
+
+            if(diff<0){
+
+                diffCell=
+                `<span class="green">▼ -${mins}m ${secs}s</span>`;
+            }
+            else if(diff>0){
+
+                diffCell=
+                `<span class="red">▲ +${mins}m ${secs}s</span>`;
+            }
+            else{
+
+                diffCell=
+                `<span class="gray">▬ 0s</span>`;
+            }
+
+        }
+
+        tbody.innerHTML+=`
+          <tr>
+              <td>${agent}</td>
+              <td>${secondsToText(today)}</td>
+              <td>${yesterday ? secondsToText(yesterday) : '-'}</td>
+              <td>${diffCell}</td>
+          </tr>
+        `;
+
+      });
+
+}
+
+loadFilesList();
+
+</script>
 
 </body>
 </html>
