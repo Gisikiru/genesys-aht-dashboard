@@ -1,0 +1,45 @@
+name: Update files.json
+
+on:
+  push:
+    paths:
+      - 'data/**/*.csv'
+
+permissions:
+  contents: write
+
+jobs:
+  update-json:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate files.json
+        run: |
+
+          echo "[" > data/files.json
+
+          find data -type f -name "*.csv" \
+            | sort \
+            | sed 's#^data/##' \
+            | awk '{print "\"" $0 "\""}' \
+            | paste -sd "," - \
+            >> data/files.json
+
+          echo "]" >> data/files.json
+
+      - name: Commit changes
+        run: |
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add data/files.json
+
+          git diff --staged --quiet || \
+          git commit -m "Auto update files.json"
+
+          git push
