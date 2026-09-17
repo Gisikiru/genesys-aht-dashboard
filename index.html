@@ -7,6 +7,7 @@
 <title>AHT Dashboard</title>
 
 <style>
+
 body{
     font-family: Arial,sans-serif;
     background:#f4f6fa;
@@ -27,14 +28,38 @@ h1{
 
 .filters{
     display:flex;
-    gap:15px;
+    gap:20px;
     margin-bottom:20px;
-    align-items:center;
+    flex-wrap:wrap;
+}
+
+.filters div{
+    display:flex;
+    flex-direction:column;
 }
 
 select{
     padding:8px;
     border-radius:6px;
+    min-width:150px;
+}
+
+.summary{
+    display:flex;
+    gap:15px;
+    margin-bottom:20px;
+}
+
+.card{
+    background:#eef4ff;
+    padding:15px;
+    border-radius:8px;
+    min-width:220px;
+}
+
+.card-value{
+    font-size:28px;
+    font-weight:bold;
 }
 
 table{
@@ -69,23 +94,6 @@ td{
     font-weight:bold;
 }
 
-.summary{
-    display:flex;
-    gap:15px;
-    margin-bottom:20px;
-}
-
-.card{
-    background:#eef4ff;
-    padding:15px;
-    border-radius:8px;
-    min-width:180px;
-}
-
-.card-value{
-    font-size:22px;
-    font-weight:bold;
-}
 </style>
 </head>
 
@@ -96,11 +104,26 @@ td{
 <h1>📞 AHT Comparativo</h1>
 
 <div class="filters">
-    <label>Fecha:</label>
-    <select id="dateSelect"></select>
+
+    <div>
+        <label>Año:</label>
+        <select id="yearSelect"></select>
+    </div>
+
+    <div>
+        <label>Mes:</label>
+        <select id="monthSelect"></select>
+    </div>
+
+    <div>
+        <label>Fecha:</label>
+        <select id="dateSelect"></select>
+    </div>
+
 </div>
 
 <div class="summary">
+
     <div class="card">
         <div>AHT Promedio Seleccionado</div>
         <div class="card-value" id="avgCurrent">-</div>
@@ -110,9 +133,11 @@ td{
         <div>AHT Promedio Día Anterior</div>
         <div class="card-value" id="avgPrevious">-</div>
     </div>
+
 </div>
 
 <table>
+
 <thead>
 <tr>
 <th>Agente</th>
@@ -121,7 +146,9 @@ td{
 <th>Diferencia</th>
 </tr>
 </thead>
+
 <tbody id="tableBody"></tbody>
+
 </table>
 
 </div>
@@ -129,36 +156,150 @@ td{
 <script>
 
 let availableFiles=[];
+let groupedFiles={};
 
 async function loadFilesList(){
 
-    const response = await fetch('./data/files.json');
-    availableFiles = await response.json();
+    const response=await fetch('./data/files.json');
+    availableFiles=await response.json();
 
-    const selector = document.getElementById('dateSelect');
+    buildFileStructure();
+    populateYears();
+}
 
-    availableFiles.forEach((file,index)=>{
+function buildFileStructure(){
 
-        let option=document.createElement('option');
+    groupedFiles={};
 
-        option.value=index;
-        option.textContent=file.replace('.csv','');
+    availableFiles.forEach(file=>{
 
-        selector.appendChild(option);
+        const parts=file.split('/');
+
+        const year=parts[0];
+        const month=parts[1];
+
+        if(!groupedFiles[year]){
+            groupedFiles[year]={};
+        }
+
+        if(!groupedFiles[year][month]){
+            groupedFiles[year][month]=[];
+        }
+
+        groupedFiles[year][month].push(file);
+
     });
 
-    selector.selectedIndex=availableFiles.length-1;
+}
 
-    selector.addEventListener('change',loadDashboard);
+function populateYears(){
+
+    const yearSelect=document.getElementById('yearSelect');
+
+    yearSelect.innerHTML='';
+
+    Object.keys(groupedFiles)
+        .sort()
+        .forEach(year=>{
+
+            let option=document.createElement('option');
+
+            option.value=year;
+            option.textContent=year;
+
+            yearSelect.appendChild(option);
+
+        });
+
+    yearSelect.value=
+        Object.keys(groupedFiles).sort().slice(-1)[0];
+
+    yearSelect.addEventListener('change',populateMonths);
+
+    populateMonths();
+}
+
+function populateMonths(){
+
+    const year=document.getElementById('yearSelect').value;
+
+    const monthSelect=document.getElementById('monthSelect');
+
+    monthSelect.innerHTML='';
+
+    Object.keys(groupedFiles[year])
+        .sort()
+        .forEach(month=>{
+
+            let option=document.createElement('option');
+
+            option.value=month;
+
+            option.textContent=
+                month.charAt(0).toUpperCase() +
+                month.slice(1);
+
+            monthSelect.appendChild(option);
+
+        });
+
+    monthSelect.value=
+        Object.keys(groupedFiles[year]).sort().slice(-1)[0];
+
+    monthSelect.addEventListener('change',populateDates);
+
+    populateDates();
+}
+
+function populateDates(){
+
+    const year=
+        document.getElementById('yearSelect').value;
+
+    const month=
+        document.getElementById('monthSelect').value;
+
+    const dateSelect=
+        document.getElementById('dateSelect');
+
+    dateSelect.innerHTML='';
+
+    groupedFiles[year][month]
+        .sort()
+        .forEach(file=>{
+
+            let option=document.createElement('option');
+
+            option.value=file;
+
+            option.textContent=
+                file.split('/').pop().replace('.csv','');
+
+            dateSelect.appendChild(option);
+
+        });
+
+    dateSelect.selectedIndex=
+        dateSelect.options.length-1;
+
+    dateSelect.onchange=loadDashboard;
 
     loadDashboard();
 }
 
-function secondsToText(ms){
+function secondsToText(value){
 
-   if(!ms || isNaN(ms)) return "-";
+   if(value===null || value===undefined || isNaN(value))
+      return "-";
 
-   const totalSeconds=Math.round(ms/1000);
+   let totalSeconds;
+
+   if(value>100000){
+      totalSeconds=Math.round(value/1000);
+   }
+   else{
+      totalSeconds=Math.round(value);
+   }
 
    const m=Math.floor(totalSeconds/60);
    const s=totalSeconds%60;
@@ -172,7 +313,9 @@ async function loadCsv(path){
 
     const text=await resp.text();
 
-    const lines=text.split('\n').filter(x=>x.trim());
+    const lines=text
+        .split('\n')
+        .filter(x=>x.trim());
 
     const headers=parseCSV(lines[0]);
 
@@ -180,15 +323,15 @@ async function loadCsv(path){
 
     for(let i=1;i<lines.length;i++){
 
-       const values=parseCSV(lines[i]);
+        const values=parseCSV(lines[i]);
 
-       let row={};
+        const row={};
 
-       headers.forEach((h,index)=>{
+        headers.forEach((h,index)=>{
             row[h]=values[index];
-       });
+        });
 
-       rows.push(row);
+        rows.push(row);
     }
 
     return rows;
@@ -207,7 +350,7 @@ function parseCSV(line){
         if(char === '"'){
             inside=!inside;
         }
-        else if(char === ',' && !inside){
+        else if(char===',' && !inside){
             result.push(current);
             current="";
         }
@@ -223,110 +366,144 @@ function parseCSV(line){
 
 function buildMap(rows){
 
-   const map={};
+    const map={};
 
-   rows.forEach(r=>{
+    rows.forEach(r=>{
 
-      const name=r["Agent Name"];
+        const name=r["Agent Name"];
 
-      const aht=parseFloat(r["Avg Handle"]);
+        const value=
+            parseFloat(
+                String(r["Avg Handle"])
+                .replace(/,/g,'')
+                .trim()
+            );
 
-      if(name && !isNaN(aht)){
-         map[name]=aht;
-      }
+        if(name && !isNaN(value)){
+            map[name]=value;
+        }
 
-   });
+    });
 
-   return map;
+    return map;
 }
 
 async function loadDashboard(){
 
-    const idx=parseInt(document.getElementById("dateSelect").value);
+    const currentFile=
+        document.getElementById("dateSelect").value;
 
-    const currentFile=availableFiles[idx];
+    const currentIndex=
+        availableFiles.indexOf(currentFile);
 
-    const previousFile=availableFiles[idx-1];
+    const previousFile=
+        availableFiles[currentIndex-1];
 
-    const currentRows=await loadCsv('./data/' + currentFile);
+    const currentRows=
+        await loadCsv('./data/' + currentFile);
 
-    const currentMap=buildMap(currentRows);
+    const currentMap=
+        buildMap(currentRows);
 
     let previousMap={};
 
     if(previousFile){
 
-       const previousRows=await loadCsv('./data/' + previousFile);
+        const previousRows=
+            await loadCsv('./data/' + previousFile);
 
-       previousMap=buildMap(previousRows);
+        previousMap=
+            buildMap(previousRows);
     }
 
-    let currentValues=Object.values(currentMap);
+    const currentValues=
+        Object.values(currentMap);
 
-    let previousValues=Object.values(previousMap);
+    const previousValues=
+        Object.values(previousMap);
 
-    let avgCurrent=currentValues.reduce((a,b)=>a+b,0)/currentValues.length;
-
-    let avgPrevious=previousValues.length
-        ? previousValues.reduce((a,b)=>a+b,0)/previousValues.length
+    const avgCurrent=
+        currentValues.length
+        ? currentValues.reduce((a,b)=>a+b,0)
+            / currentValues.length
         : 0;
 
-    document.getElementById('avgCurrent').textContent=
+    const avgPrevious=
+        previousValues.length
+        ? previousValues.reduce((a,b)=>a+b,0)
+            / previousValues.length
+        : 0;
+
+    document.getElementById("avgCurrent")
+        .textContent=
         secondsToText(avgCurrent);
 
-    document.getElementById('avgPrevious').textContent=
-        previousValues.length ? secondsToText(avgPrevious) : "-";
+    document.getElementById("avgPrevious")
+        .textContent=
+        previousValues.length
+        ? secondsToText(avgPrevious)
+        : "-";
 
-    let tbody=document.getElementById('tableBody');
+    const tbody=
+        document.getElementById('tableBody');
 
     tbody.innerHTML='';
 
     Object.keys(currentMap)
-      .sort()
-      .forEach(agent=>{
+        .sort()
+        .forEach(agent=>{
 
-        const today=currentMap[agent];
+            const current=currentMap[agent];
 
-        const yesterday=previousMap[agent];
+            const previous=
+                previousMap[agent];
 
-        let diffCell="<span class='gray'>N/A</span>";
+            let diffCell=
+                '<span class="gray">N/A</span>';
 
-        if(yesterday){
+            if(previous){
 
-            const diff=today-yesterday;
+                let diff=current-previous;
 
-            const mins=Math.floor(Math.abs(diff)/1000/60);
+                let absDiff=Math.abs(diff);
 
-            const secs=Math.floor((Math.abs(diff)/1000)%60);
+                if(absDiff>100000){
+                    absDiff=absDiff/1000;
+                }
 
-            if(diff<0){
+                const mins=
+                    Math.floor(absDiff/60);
 
-                diffCell=
-                `<span class="green">▼ -${mins}m ${secs}s</span>`;
+                const secs=
+                    Math.floor(absDiff%60);
+
+                if(diff<0){
+
+                    diffCell=
+                    `<span class="green">▼ -${mins}m ${secs}s</span>`;
+
+                }
+                else if(diff>0){
+
+                    diffCell=
+                    `<span class="red">▲ +${mins}m ${secs}s</span>`;
+                }
+                else{
+
+                    diffCell=
+                    `<span class="gray">▬ 0s</span>`;
+                }
             }
-            else if(diff>0){
 
-                diffCell=
-                `<span class="red">▲ +${mins}m ${secs}s</span>`;
-            }
-            else{
-
-                diffCell=
-                `<span class="gray">▬ 0s</span>`;
-            }
-
-        }
-
-        tbody.innerHTML+=`
-          <tr>
-              <td>${agent}</td>
-              <td>${secondsToText(today)}</td>
-              <td>${yesterday ? secondsToText(yesterday) : '-'}</td>
-              <td>${diffCell}</td>
-          </tr>
-        `;
-
-      });
+            tbody.innerHTML += `
+                <tr>
+                    <td>${agent}</td>
+                    <td>${secondsToText(current)}</td>
+                    <td>${previous ? secondsToText(previous) : '-'}</td>
+                    <td>${diffCell}</td>
+                </tr>
+            `;
+        });
 
 }
 
