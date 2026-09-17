@@ -289,22 +289,23 @@ function populateDates(){
 
 function secondsToText(value){
 
-   if(value===null || value===undefined || isNaN(value))
-      return "-";
+    if(value===null || value===undefined || isNaN(value)){
+        return "-";
+    }
 
-   let totalSeconds;
+    let totalSeconds;
 
-   if(value>100000){
-      totalSeconds=Math.round(value/1000);
-   }
-   else{
-      totalSeconds=Math.round(value);
-   }
+    if(value > 100000){
+        totalSeconds = Math.round(value / 1000);
+    }
+    else{
+        totalSeconds = Math.round(value);
+    }
 
-   const m=Math.floor(totalSeconds/60);
-   const s=totalSeconds%60;
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
 
-   return `${m}m ${s}s`;
+    return `${m}m ${s}s`;
 }
 
 async function loadCsv(path){
@@ -370,14 +371,16 @@ function buildMap(rows){
 
     rows.forEach(r=>{
 
-        const name=r["Agent Name"];
+        const name =
+            String(r["Agent Name"] || "")
+            .trim();
 
-        const value=
-            parseFloat(
-                String(r["Avg Handle"])
-                .replace(/,/g,'')
-                .trim()
-            );
+        const raw =
+            String(r["Avg Handle"] || "")
+            .replace(/,/g,'')
+            .trim();
+
+        const value = parseFloat(raw);
 
         if(name && !isNaN(value)){
             map[name]=value;
@@ -390,29 +393,29 @@ function buildMap(rows){
 
 async function loadDashboard(){
 
-    const currentFile=
+    const currentFile =
         document.getElementById("dateSelect").value;
 
-    const currentIndex=
+    const currentIndex =
         availableFiles.indexOf(currentFile);
 
-    const previousFile=
-        availableFiles[currentIndex-1];
+    const previousFile =
+        availableFiles[currentIndex - 1];
 
-    const currentRows=
+    const currentRows =
         await loadCsv('./data/' + currentFile);
 
-    const currentMap=
+    const currentMap =
         buildMap(currentRows);
 
     let previousMap={};
 
-    if(previousFile){
+    if(previousFile !== undefined){
 
-        const previousRows=
+        const previousRows =
             await loadCsv('./data/' + previousFile);
 
-        previousMap=
+        previousMap =
             buildMap(previousRows);
     }
 
@@ -424,28 +427,24 @@ async function loadDashboard(){
 
     const avgCurrent=
         currentValues.length
-        ? currentValues.reduce((a,b)=>a+b,0)
-            / currentValues.length
+        ? currentValues.reduce((a,b)=>a+b,0) / currentValues.length
         : 0;
 
     const avgPrevious=
         previousValues.length
-        ? previousValues.reduce((a,b)=>a+b,0)
-            / previousValues.length
+        ? previousValues.reduce((a,b)=>a+b,0) / previousValues.length
         : 0;
 
-    document.getElementById("avgCurrent")
-        .textContent=
+    document.getElementById("avgCurrent").textContent =
         secondsToText(avgCurrent);
 
-    document.getElementById("avgPrevious")
-        .textContent=
+    document.getElementById("avgPrevious").textContent =
         previousValues.length
-        ? secondsToText(avgPrevious)
-        : "-";
+            ? secondsToText(avgPrevious)
+            : "-";
 
-    const tbody=
-        document.getElementById('tableBody');
+    const tbody =
+        document.getElementById("tableBody");
 
     tbody.innerHTML='';
 
@@ -453,44 +452,47 @@ async function loadDashboard(){
         .sort()
         .forEach(agent=>{
 
-            const current=currentMap[agent];
+            const current =
+                currentMap[agent];
 
-            const previous=
-                previousMap[agent];
+            const previous =
+                Object.prototype.hasOwnProperty.call(previousMap, agent)
+                ? previousMap[agent]
+                : undefined;
 
-            let diffCell=
+            let diffCell =
                 '<span class="gray">N/A</span>';
 
-            if(previous){
+            if(previous !== undefined){
 
-                let diff=current-previous;
+                const diff =
+                    current - previous;
 
-                let absDiff=Math.abs(diff);
+                const absDiff =
+                    Math.abs(diff);
 
-                if(absDiff>100000){
-                    absDiff=absDiff/1000;
-                }
+                const diffSeconds =
+                    absDiff / 1000;
 
-                const mins=
-                    Math.floor(absDiff/60);
+                const mins =
+                    Math.floor(diffSeconds / 60);
 
-                const secs=
-                    Math.floor(absDiff%60);
+                const secs =
+                    Math.floor(diffSeconds % 60);
 
-                if(diff<0){
+                if(diff < 0){
 
-                    diffCell=
+                    diffCell =
                     `<span class="green">▼ -${mins}m ${secs}s</span>`;
-
                 }
-                else if(diff>0){
+                else if(diff > 0){
 
-                    diffCell=
+                    diffCell =
                     `<span class="red">▲ +${mins}m ${secs}s</span>`;
                 }
                 else{
 
-                    diffCell=
+                    diffCell =
                     `<span class="gray">▬ 0s</span>`;
                 }
             }
@@ -499,7 +501,11 @@ async function loadDashboard(){
                 <tr>
                     <td>${agent}</td>
                     <td>${secondsToText(current)}</td>
-                    <td>${previous ? secondsToText(previous) : '-'}</td>
+                    <td>${
+                        previous !== undefined
+                        ? secondsToText(previous)
+                        : '-'
+                    }</td>
                     <td>${diffCell}</td>
                 </tr>
             `;
